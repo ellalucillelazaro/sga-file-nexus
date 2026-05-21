@@ -1,52 +1,9 @@
 # SGA FILE NEXUS
+SGA FILE NEXUS is a browser-based firm folder cleanup tool. It scans selected server or shared-drive folders, detects empty folders inside parent folders, applies protected-folder and age rules, supports optional quarantine before discard, requires local confirmation, and exports a clean audit report for daily workflow tracking.
 
-This is the website version of SGA FILE NEXUS. It runs as a local browser website using plain HTML, CSS, and JavaScript.
+## Firm Backend Mode
 
-## Run the Website
-
-Open `index.html` in a modern desktop browser, or run a small local website server from this folder:
-
-```bash
-python3 -m http.server 8080
-```
-
-Then open:
-
-```text
-http://localhost:8080
-```
-
-## Website Flow
-
-1. Enter an approved server folder path in Firm Server Backend, or choose/drop a folder for browser-only scan mode.
-2. Select the parent folders that should be scanned.
-3. Apply scan rules for empty-folder definition, protected paths, age, and workflow cadence.
-4. Review the empty-folder checklist.
-5. Optionally enable quarantine.
-6. Confirm review approval and discard selected folders.
-7. Download the audit report.
-
-## Folder Rules
-
-Expected structure:
-
-```text
-Main Folder/
-  Parent Folder A/
-    Project One/
-      Empty Subfolder/
-    Project Two/
-  Parent Folder B/
-    Archive Review/
-```
-
-The website always preserves the main folder. Empty selected parent folders and empty folders inside selected parent folders can be reviewed and discarded.
-
-System files such as `.DS_Store`, `Thumbs.db`, `desktop.ini`, and AppleDouble `._` files are ignored when the "Ignore system files" rule is active.
-
-## Cleanup Access
-
-For daily firm workflow, run the internal backend from the project root:
+For real server cleanup, run the internal backend and open the website from it:
 
 ```powershell
 $env:SGA_NEXUS_ALLOWED_ROOTS="S:\Clients;\\firm-server\share"
@@ -54,10 +11,12 @@ $env:SGA_NEXUS_API_KEY="choose-a-private-key"
 npm run backend
 ```
 
-Then open `http://127.0.0.1:8787`, enter the same backend key, and scan an approved server folder path.
+Then open `http://127.0.0.1:8787`.
 
-Direct discard from browser folder access is still available where supported. Drag-and-drop and file-upload scans remain scan-only and can still export an audit report.
+The backend only scans and discards folders inside `SGA_NEXUS_ALLOWED_ROOTS`.
 
-## Quarantine
+## GitHub Pages
 
-Quarantine is optional. When enabled, SGA FILE NEXUS creates an `SGA_FILE_NEXUS_QUARANTINE` folder and mirrors the selected empty-folder paths before removing them from their original location.
+The website can be hosted on GitHub Pages for a normal firm link. See `GITHUB-PAGES.md`.
+
+If GitHub Pages is used, the firm backend should use an `https://` internal URL so browsers allow the hosted website to connect to it.
