@@ -338,6 +338,13 @@ h2 {
   text-transform: uppercase;
 }
 
+.field-label[title],
+.check-row[title],
+th[title],
+.drop-zone[title] {
+  cursor: help;
+}
+
 .field-control {
   width: 100%;
   min-height: 38px;
@@ -639,6 +646,46 @@ tr:last-child td {
   letter-spacing: 0.02em;
 }
 
+.path-cell-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.path-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.path-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.path-action {
+  appearance: none;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.path-action:hover {
+  border-color: var(--sga-red);
+  color: var(--sga-red);
+}
+
 .row-status {
   display: inline-flex;
   align-items: center;
@@ -796,6 +843,14 @@ tr:last-child td {
 
   .review-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .path-cell-content {
+    grid-template-columns: 1fr;
+  }
+
+  .path-actions {
+    justify-content: flex-start;
   }
 
   .backend-grid {

@@ -17,25 +17,21 @@ const PRESETS = {
   daily: {
     emptyDefinition: "ignored",
     ageFilter: "0",
-    cadence: "Daily",
     protectedRules: DEFAULT_PROTECTED_RULES
   },
   weekly: {
     emptyDefinition: "ignored",
     ageFilter: "30",
-    cadence: "Weekly",
     protectedRules: DEFAULT_PROTECTED_RULES
   },
   archive: {
     emptyDefinition: "ignored",
     ageFilter: "90",
-    cadence: "Monthly",
     protectedRules: ["DO NOT DELETE", "_Active", "Legal Hold", "Client Root", QUARANTINE_FOLDER].join("\n")
   },
   clientSafe: {
     emptyDefinition: "strict",
     ageFilter: "60",
-    cadence: "Weekly",
     protectedRules: ["Archive", "Templates", "DO NOT DELETE", "_Active", "Legal Hold", "Client Root", QUARANTINE_FOLDER].join("\n")
   }
 };
@@ -44,6 +40,7 @@ const state = {
   sourceKind: "",
   sourceLabel: "",
   mainFolderName: "",
+  scannedFolders: 0,
   rootHandle: null,
   hasWriteAccess: false,
   directories: new Map(),
@@ -55,6 +52,7 @@ const state = {
   filteredRows: [],
   selectedFolders: new Set(),
   processedRows: new Set(),
+  discardedRows: [],
   failures: [],
   reportBlob: null,
   reportUrl: "",
@@ -101,7 +99,6 @@ const els = {
   ageFilter: document.getElementById("ageFilter"),
   includeUnknownDates: document.getElementById("includeUnknownDates"),
   protectedRules: document.getElementById("protectedRules"),
-  cadenceSelect: document.getElementById("cadenceSelect"),
   quarantineOption: document.getElementById("quarantineOption"),
   approvalCheck: document.getElementById("approvalCheck"),
   searchInput: document.getElementById("searchInput"),
@@ -189,10 +186,6 @@ function bindEvents() {
   els.ageFilter.addEventListener("change", handleRuleChange);
   els.includeUnknownDates.addEventListener("change", handleRuleChange);
   els.protectedRules.addEventListener("input", debounce(handleRuleChange, 250));
-  els.cadenceSelect.addEventListener("change", () => {
-    buildReport();
-    addLog(`${els.cadenceSelect.value} workflow cadence saved for the audit report.`);
-  });
   els.quarantineOption.addEventListener("change", updateControls);
   els.approvalCheck.addEventListener("change", updateControls);
   els.searchInput.addEventListener("input", renderPreview);
@@ -271,6 +264,7 @@ function loadBackendScan(scan) {
   state.sourceKind = "backend";
   state.sourceLabel = scan.sourceLabel || "Firm server backend";
   state.mainFolderName = scan.mainFolderName || "Server Folder";
+  state.scannedFolders = scan.scannedFolders || 0;
   state.backendRootPath = scan.rootPath || els.serverPathInput.value.trim();
   state.hasWriteAccess = Boolean(scan.hasWriteAccess);
   state.directories = new Map([["backend", { path: "backend" }]]);
@@ -287,13 +281,14 @@ function loadBackendScan(scan) {
   renderPreview();
   resetRunMetrics();
   buildReport();
-  els.folderSummary.textContent = `${state.mainFolderName}: ${state.parentFolders.size} parent folders, ${scan.scannedFolders || 0} folders scanned, ${state.selectedFolders.size} ready.`;
+  updateFolderSummary();
   setStatus("Finished");
 }
 
 function handleRuleChange() {
   if (state.sourceKind === "backend") {
     state.processedRows.clear();
+    state.discardedRows = [];
     state.failures = [];
     setStatus("Scan rules changed.");
     addLog("Scan rules changed. Apply scan rules to refresh the server review list.");
@@ -355,7 +350,6 @@ function applyPreset(name, shouldApplyRules) {
   const preset = PRESETS[name] || PRESETS.daily;
   els.emptyDefinition.value = preset.emptyDefinition;
   els.ageFilter.value = preset.ageFilter;
-  els.cadenceSelect.value = preset.cadence;
   els.protectedRules.value = preset.protectedRules;
   if (shouldApplyRules) {
     applyScanRules();
@@ -593,12 +587,12 @@ function ensureDirectory(path, options = {}) {
 function finishScan() {
   const firstPath = [...state.directories.keys()][0] || state.files[0]?.path || "";
   state.mainFolderName = state.mainFolderName || commonMainFolder(firstPath) || "Selected Server Folder";
+  state.scannedFolders = state.directories.size;
   rebuildParentFolders();
   state.selectedParents = new Set(state.parentFolders.keys());
   applyScanRules();
 
-  const emptyCount = state.allReviewRows.filter(row => row.status === "ready").length;
-  els.folderSummary.textContent = `${state.mainFolderName}: ${state.parentFolders.size} parent folders, ${state.directories.size} folders scanned, ${emptyCount} ready.`;
+  updateFolderSummary();
   setStatus("Finished");
   addLog(`Loaded "${state.mainFolderName}" with ${state.directories.size} folders scanned.`);
 }
@@ -650,10 +644,12 @@ function applyScanRules() {
   }
 
   state.processedRows.clear();
+  state.discardedRows = [];
   state.failures = [];
   renderParentList();
   renderPreview();
   resetRunMetrics();
+  updateFolderSummary();
   buildReport();
   updateControls();
 }
@@ -739,15 +735,20 @@ function syncParentCounts() {
 function renderParentList() {
   els.parentList.innerHTML = "";
 
-  if (!state.parentFolders.size) {
-    els.parentList.innerHTML = '<div class="empty-state">No parent folders detected.</div>';
+  const visibleParents = [...state.parentFolders.values()]
+    .filter(parent => parent.emptyCount || parent.protectedCount)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!visibleParents.length) {
+    els.parentList.innerHTML = '<div class="empty-state">No parent folders have matching empty folders.</div>';
     return;
   }
 
-  for (const parent of [...state.parentFolders.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const parent of visibleParents) {
     const id = `parent-${slug(parent.name)}`;
     const label = document.createElement("label");
     label.className = "parent-item";
+    label.title = "Select or clear every reviewed empty folder under this parent folder.";
     label.innerHTML = `
       <input type="checkbox" id="${id}" ${state.selectedParents.has(parent.name) ? "checked" : ""}>
       <span class="parent-name"></span>
@@ -786,7 +787,9 @@ function renderPreview() {
   els.previewCount.textContent = `${state.filteredRows.length} folders`;
 
   if (!state.reviewRows.length) {
-    els.previewBody.innerHTML = '<tr><td colspan="5" class="empty-state">No empty folders matched the current scan rules.</td></tr>';
+    els.previewBody.innerHTML = state.discardedRows.length
+      ? '<tr><td colspan="5" class="empty-state">No empty folders remain in the review list. Discarded folders are saved in the audit report.</td></tr>'
+      : '<tr><td colspan="5" class="empty-state">No empty folders matched the current scan rules.</td></tr>';
     updateControls();
     return;
   }
@@ -820,8 +823,7 @@ function renderPreview() {
 
     const checkCell = document.createElement("td");
     checkCell.appendChild(checkbox);
-    const pathCell = cell(row.path);
-    pathCell.className = "path-cell";
+    const pathCell = folderPathCell(row);
     tr.append(
       checkCell,
       cell(row.parent),
@@ -949,8 +951,12 @@ async function discardSelectedFolders() {
   state.processing = false;
   setStatus("Finished");
   updateMetrics(true);
+  syncParentCounts();
+  renderParentList();
+  updateFolderSummary();
   buildReport();
   renderPreview();
+  resetRunMetrics();
   updateControls();
 
   if (quarantineHandle) {
@@ -1012,8 +1018,12 @@ async function discardSelectedFoldersWithBackend(selectedRows) {
     setStatus("Finished");
   } finally {
     state.processing = false;
+    syncParentCounts();
+    renderParentList();
+    updateFolderSummary();
     buildReport();
     renderPreview();
+    resetRunMetrics();
     updateControls();
   }
 }
@@ -1084,12 +1094,29 @@ async function validateFolderStillDiscardable(folderHandle, mode) {
 }
 
 function markProcessed(path) {
-  for (const row of state.reviewRows) {
-    if (row.path === path || row.path.startsWith(`${path}/`)) {
-      state.processedRows.add(row.path);
-      state.selectedFolders.delete(row.path);
+  const matches = state.reviewRows.filter(row => isSameOrChildPath(row.path, path));
+  if (!matches.length) return;
+
+  const alreadyStored = new Set(state.discardedRows.map(row => row.path));
+  for (const row of matches) {
+    state.processedRows.add(row.path);
+    state.selectedFolders.delete(row.path);
+    if (!alreadyStored.has(row.path)) {
+      state.discardedRows.push({
+        ...row,
+        reportStatus: "processed",
+        canDiscard: false
+      });
     }
   }
+
+  state.allReviewRows = state.allReviewRows.filter(row => !isSameOrChildPath(row.path, path));
+  state.reviewRows = state.reviewRows.filter(row => !isSameOrChildPath(row.path, path));
+  state.filteredRows = state.filteredRows.filter(row => !isSameOrChildPath(row.path, path));
+}
+
+function isSameOrChildPath(candidatePath, selectedPath) {
+  return candidatePath === selectedPath || candidatePath.startsWith(`${selectedPath}/`);
 }
 
 function buildReport() {
@@ -1104,12 +1131,12 @@ function buildReport() {
     "generated_at",
     "app",
     "source",
-    "workflow_cadence",
     "preset",
     "empty_definition",
     "age_filter_days",
     "quarantine_selected",
     "folder_path",
+    "copyable_path",
     "parent_folder",
     "last_modified",
     "status",
@@ -1117,20 +1144,21 @@ function buildReport() {
     "reason"
   ]];
 
-  for (const row of state.reviewRows) {
+  const reportRows = [...state.reviewRows, ...state.discardedRows];
+  for (const row of reportRows) {
     rows.push([
       generatedAt,
       "SGA FILE NEXUS",
       state.sourceLabel,
-      els.cadenceSelect.value,
       els.presetSelect.options[els.presetSelect.selectedIndex].text,
       els.emptyDefinition.options[els.emptyDefinition.selectedIndex].text,
       els.ageFilter.value,
       els.quarantineOption.checked ? "yes" : "no",
       row.path,
+      absolutePathForRow(row),
       row.parent,
       formatDate(row.lastModified),
-      statusForRow(row),
+      row.reportStatus || statusForRow(row),
       state.selectedFolders.has(row.path) ? "yes" : "no",
       failureForPath(row.path)?.message || row.reason
     ]);
@@ -1141,7 +1169,7 @@ function buildReport() {
   state.reportName = `${safeFileName(state.mainFolderName || "SGA_FILE_NEXUS")}_empty_folder_audit.csv`;
   els.downloadButton.disabled = false;
   if (!els.quarantineOption.checked || !els.zipInfo.textContent.includes("Quarantined")) {
-    els.zipInfo.textContent = `Audit report ready: ${state.reviewRows.length} reviewed folders`;
+    els.zipInfo.textContent = `Audit report ready: ${reportRows.length} reviewed folders`;
   }
 }
 
@@ -1171,7 +1199,7 @@ function resetRunMetrics() {
     startTime: performance.now()
   };
   els.totalFiles.textContent = state.reviewRows.length;
-  els.completedFiles.textContent = state.processedRows.size;
+  els.completedFiles.textContent = state.discardedRows.length;
   els.remainingFiles.textContent = selectedReady;
   els.elapsedTime.textContent = "00:00";
   els.etaTime.textContent = "--:--";
@@ -1188,7 +1216,7 @@ function updateMetrics(done = false) {
   const etaSeconds = perSecond > 0 ? remaining / perSecond : 0;
 
   els.totalFiles.textContent = state.reviewRows.length;
-  els.completedFiles.textContent = state.processedRows.size + completed;
+  els.completedFiles.textContent = state.discardedRows.length || completed;
   els.remainingFiles.textContent = remaining;
   els.elapsedTime.textContent = formatDuration(elapsedSeconds);
   els.etaTime.textContent = done ? "00:00" : (completed ? formatDuration(etaSeconds) : "--:--");
@@ -1198,7 +1226,7 @@ function updateMetrics(done = false) {
 }
 
 function updateControls() {
-  const hasParents = state.parentFolders.size > 0;
+  const hasParents = state.parentFolders.size > 0 && state.allReviewRows.length > 0;
   const hasRows = state.reviewRows.length > 0;
   const selectedReady = state.reviewRows.filter(row => state.selectedFolders.has(row.path) && row.canDiscard && statusForRow(row) === "ready").length;
   const canDiscard = selectedReady > 0 && els.approvalCheck.checked && state.hasWriteAccess && !state.processing;
@@ -1227,6 +1255,22 @@ function updateControls() {
   if (!state.hasWriteAccess && hasRows) {
     els.zipInfo.textContent = "Scan-only source: download the audit report for server cleanup.";
   }
+}
+
+function updateFolderSummary() {
+  if (!state.mainFolderName) {
+    els.folderSummary.textContent = "No folder loaded.";
+    return;
+  }
+
+  const activeParentCount = [...state.parentFolders.values()]
+    .filter(parent => parent.emptyCount || parent.protectedCount)
+    .length;
+  const readyCount = state.allReviewRows.filter(row => row.status === "ready").length;
+  const protectedCount = state.allReviewRows.filter(row => row.status === "protected").length;
+  const discardedText = state.discardedRows.length ? `, ${state.discardedRows.length} discarded` : "";
+
+  els.folderSummary.textContent = `${state.mainFolderName}: ${activeParentCount} parent folders, ${state.scannedFolders} folders scanned, ${readyCount} ready, ${protectedCount} protected${discardedText}.`;
 }
 
 function setProgress(percent) {
@@ -1259,6 +1303,7 @@ function clearWorkingState() {
   state.sourceKind = "";
   state.sourceLabel = "";
   state.mainFolderName = "";
+  state.scannedFolders = 0;
   state.rootHandle = null;
   state.hasWriteAccess = false;
   state.directories = new Map();
@@ -1270,6 +1315,7 @@ function clearWorkingState() {
   state.filteredRows = [];
   state.selectedFolders = new Set();
   state.processedRows = new Set();
+  state.discardedRows = [];
   state.failures = [];
   state.reportBlob = null;
   revokeReportObjectUrl();
@@ -1319,10 +1365,123 @@ function statusCell(status, reason) {
   return td;
 }
 
+function folderPathCell(row) {
+  const td = document.createElement("td");
+  td.className = "path-cell";
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "path-cell-content";
+
+  const pathText = document.createElement("span");
+  pathText.className = "path-text";
+  pathText.textContent = row.path;
+  pathText.title = `Copyable path: ${absolutePathForRow(row)}`;
+
+  const actions = document.createElement("div");
+  actions.className = "path-actions";
+
+  const copyButton = document.createElement("button");
+  copyButton.className = "path-action";
+  copyButton.type = "button";
+  copyButton.textContent = "Copy";
+  copyButton.title = "Copy this folder path so you can paste it into File Explorer or an email.";
+  copyButton.addEventListener("click", () => copyPathForRow(row, copyButton));
+  actions.appendChild(copyButton);
+
+  if (canAttemptOpenPath(row)) {
+    const openButton = document.createElement("button");
+    openButton.className = "path-action";
+    openButton.type = "button";
+    openButton.textContent = "Open";
+    openButton.title = "Try to open this folder in a new tab. Some browsers block local server folder links, so the path is copied too.";
+    openButton.addEventListener("click", () => openPathForRow(row));
+    actions.appendChild(openButton);
+  }
+
+  wrapper.append(pathText, actions);
+  td.appendChild(wrapper);
+  return td;
+}
+
 function cell(text) {
   const td = document.createElement("td");
   td.textContent = text;
   return td;
+}
+
+async function copyPathForRow(row, button) {
+  const targetPath = absolutePathForRow(row);
+  const copied = await copyTextToClipboard(targetPath);
+  if (!copied) {
+    addLog("Path could not be copied automatically. Select the folder path text and copy it manually.", "warn");
+    return;
+  }
+  const original = button.textContent;
+  button.textContent = "Copied";
+  window.setTimeout(() => {
+    button.textContent = original;
+  }, 1200);
+  addLog(`Copied folder path: ${targetPath}`);
+}
+
+async function openPathForRow(row) {
+  const targetPath = absolutePathForRow(row);
+  await copyTextToClipboard(targetPath);
+  const opened = window.open(fileUrlForPath(targetPath), "_blank", "noopener");
+  addLog(opened
+    ? `Opening folder path. If the browser blocks it, paste the copied path into File Explorer: ${targetPath}`
+    : `Browser blocked direct folder opening. The path was copied so you can paste it into File Explorer: ${targetPath}`,
+    opened ? "info" : "warn");
+}
+
+function absolutePathForRow(row) {
+  if (state.sourceKind === "backend" && state.backendRootPath && row.relativePath) {
+    const root = state.backendRootPath.replace(/[\\/]+$/, "");
+    const separator = root.includes("\\") || /^[a-z]:/i.test(root) ? "\\" : "/";
+    return `${root}${separator}${row.relativePath.replaceAll("/", separator)}`;
+  }
+  return row.path;
+}
+
+function canAttemptOpenPath(row) {
+  return state.sourceKind === "backend" && Boolean(state.backendRootPath && row.relativePath);
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the textarea fallback.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+  textarea.remove();
+  return copied;
+}
+
+function fileUrlForPath(folderPath) {
+  if (folderPath.startsWith("\\\\")) {
+    return `file:${folderPath.replaceAll("\\", "/")}`;
+  }
+  if (/^[a-z]:/i.test(folderPath)) {
+    return `file:///${folderPath.replaceAll("\\", "/")}`;
+  }
+  return `file://${folderPath.replaceAll("\\", "/")}`;
 }
 
 function emptyReason(directory, strictMode) {

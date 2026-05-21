@@ -22,12 +22,12 @@
       </header>
 
       <section class="upload-hero">
-        <div id="dropZone" class="drop-zone" tabindex="0">
+        <div id="dropZone" class="drop-zone" tabindex="0" title="Drop a folder here to scan it. Drag-and-drop can create a report, but it cannot delete folders because browsers do not grant cleanup permission that way.">
           <div class="drop-icon" aria-hidden="true">+</div>
           <div class="drop-copy">
             <h2>Drop server folder</h2>
             <p>Folder names stay unchanged. Selected parent folders are scanned for empty folders.</p>
-            <button id="chooseFolderButton" class="inline-folder-choice" type="button">Choose Server Folder</button>
+            <button id="chooseFolderButton" class="inline-folder-choice" type="button" title="Best option for cleanup: choose a folder and grant access so the browser can confirm and remove selected empty folders.">Choose Server Folder</button>
             <input id="folderInput" class="folder-input" type="file" webkitdirectory directory multiple>
           </div>
         </div>
@@ -40,22 +40,22 @@
             <p class="eyebrow">Firm Server Backend</p>
             <h2>Approved Server Cleanup</h2>
           </div>
-          <button id="checkBackendButton" class="button compact" type="button">Check</button>
+          <button id="checkBackendButton" class="button compact" type="button" title="Tests whether the firm cleanup backend is reachable from this browser.">Check</button>
         </div>
         <div class="backend-grid">
           <div>
-            <label class="field-label" for="backendUrl">Backend URL</label>
-            <input id="backendUrl" class="field-control" type="url" autocomplete="off">
+            <label class="field-label" for="backendUrl" title="The web address for the firm server cleanup service. This lets the website scan and discard folders on an approved server path.">Backend URL</label>
+            <input id="backendUrl" class="field-control" type="url" autocomplete="off" title="Paste the firm cleanup backend address here.">
           </div>
           <div>
-            <label class="field-label" for="backendKey">Backend key</label>
-            <input id="backendKey" class="field-control" type="password" autocomplete="off" placeholder="Optional">
+            <label class="field-label" for="backendKey" title="Optional password-style key IT can require before this website is allowed to use the backend.">Backend key</label>
+            <input id="backendKey" class="field-control" type="password" autocomplete="off" placeholder="Optional" title="Enter the backend key if IT enabled one.">
           </div>
           <div class="backend-path-field">
-            <label class="field-label" for="serverPathInput">Server folder path</label>
-            <input id="serverPathInput" class="field-control" type="text" autocomplete="off" placeholder="Example: S:\Clients\Active or \\firm-server\share">
+            <label class="field-label" for="serverPathInput" title="The exact server folder the backend should scan, such as a mapped drive or shared network path.">Server folder path</label>
+            <input id="serverPathInput" class="field-control" type="text" autocomplete="off" placeholder="Example: S:\Clients\Active or \\firm-server\share" title="Paste the approved server path to scan.">
           </div>
-          <button id="scanBackendButton" class="button primary wide" type="button">Scan Server Path</button>
+          <button id="scanBackendButton" class="button primary wide" type="button" title="Scans the pasted server path through the approved backend and loads empty folders into the review list.">Scan Server Path</button>
         </div>
         <p id="backendStatus" class="zip-info muted">Backend not checked yet.</p>
       </section>
@@ -86,46 +86,39 @@
               </div>
             </div>
             <div class="field-stack">
-              <label class="field-label" for="presetSelect">Workflow preset</label>
-              <select id="presetSelect" class="field-control">
+              <label class="field-label" for="presetSelect" title="Quick rule sets for common cleanup reviews. Changing this adjusts the empty-folder, age, and protected-folder rules below.">Workflow preset</label>
+              <select id="presetSelect" class="field-control" title="Choose a saved set of scan rules.">
                 <option value="daily">Daily review</option>
                 <option value="weekly">Weekly cleanup</option>
                 <option value="archive">Archive sweep</option>
                 <option value="clientSafe">Client-safe cleanup</option>
               </select>
 
-              <label class="field-label" for="emptyDefinition">Empty definition</label>
-              <select id="emptyDefinition" class="field-control">
+              <label class="field-label" for="emptyDefinition" title="Controls what counts as empty. Ignore system files treats folders containing only files like .DS_Store as empty.">Empty definition</label>
+              <select id="emptyDefinition" class="field-control" title="Choose whether system files should be ignored or whether folders must be completely blank.">
                 <option value="ignored">Ignore system files</option>
                 <option value="strict">No files or subfolders</option>
               </select>
 
-              <label class="field-label" for="ageFilter">Folder age</label>
-              <select id="ageFilter" class="field-control">
+              <label class="field-label" for="ageFilter" title="Only show empty folders older than this many days. True folder dates work best through the firm backend; browser uploads may show Unknown for completely empty folders.">Folder age</label>
+              <select id="ageFilter" class="field-control" title="Filter empty folders by age before they are eligible for discard.">
                 <option value="0">Any age</option>
                 <option value="30">30 days</option>
                 <option value="60">60 days</option>
                 <option value="90">90 days</option>
               </select>
 
-              <label class="check-row">
+              <label class="check-row" title="Keep folders in the review list even when the browser cannot read a reliable modified date.">
                 <input id="includeUnknownDates" type="checkbox" checked>
                 <span>Include folders with unknown dates</span>
               </label>
 
-              <label class="field-label" for="protectedRules">Protected folder rules</label>
-              <textarea id="protectedRules" class="field-control protected-rules" spellcheck="false">Archive
+              <label class="field-label" for="protectedRules" title="Any folder path containing one of these words is protected, skipped, and left out of deletion. Put one rule per line.">Protected folder rules</label>
+              <textarea id="protectedRules" class="field-control protected-rules" spellcheck="false" title="One protected word or phrase per line. Matching folders stay protected and cannot be selected for discard.">Archive
 Templates
 DO NOT DELETE
 _Active
 Client Root</textarea>
-
-              <label class="field-label" for="cadenceSelect">Workflow cadence</label>
-              <select id="cadenceSelect" class="field-control">
-                <option value="Daily">Daily</option>
-                <option value="Weekly" selected>Weekly</option>
-                <option value="Monthly">Monthly</option>
-              </select>
             </div>
           </section>
 
@@ -137,19 +130,19 @@ Client Root</textarea>
               </div>
             </div>
             <div class="confirmation-stack">
-              <label class="check-row">
+              <label class="check-row" title="Optional safer mode. The tool copies selected empty folders into a quarantine folder first, then removes the originals.">
                 <input id="quarantineOption" type="checkbox">
                 <span>Quarantine first</span>
               </label>
-              <label class="check-row">
+              <label class="check-row" title="A final confirmation that the person using the page has reviewed the selected folder list before cleanup.">
                 <input id="approvalCheck" type="checkbox">
                 <span>I reviewed and approve the selected folders</span>
               </label>
             </div>
             <div class="primary-action-stack">
-              <button id="renameButton" class="button primary wide" type="button" disabled>Apply Scan Rules</button>
-              <button id="discardButton" class="button success wide" type="button" disabled>Discard Selected</button>
-              <button id="downloadButton" class="button wide" type="button" disabled>Download Report</button>
+              <button id="renameButton" class="button primary wide" type="button" disabled title="Refresh the review list using the current scan settings.">Apply Scan Rules</button>
+              <button id="discardButton" class="button success wide" type="button" disabled title="Remove the selected ready folders after approval and confirmation.">Discard Selected</button>
+              <button id="downloadButton" class="button wide" type="button" disabled title="Download a CSV audit report showing what was reviewed, protected, failed, or discarded.">Download Report</button>
             </div>
             <p id="zipInfo" class="zip-info muted">Audit report will be available after scanning.</p>
           </section>
@@ -175,26 +168,25 @@ Client Root</textarea>
               </div>
             </div>
             <div class="review-toolbar">
-              <input id="searchInput" class="field-control" type="search" placeholder="Search folder path">
-              <select id="statusFilter" class="field-control">
+              <input id="searchInput" class="field-control" type="search" placeholder="Search folder path" title="Filter the review list by parent name, folder path, or status reason.">
+              <select id="statusFilter" class="field-control" title="Filter by cleanup status. Discarded folders are removed from the list and kept in the audit report.">
                 <option value="all">All statuses</option>
                 <option value="ready">Ready</option>
                 <option value="protected">Protected</option>
-                <option value="processed">Processed</option>
                 <option value="failed">Failed</option>
               </select>
-              <button id="selectVisibleButton" class="button compact" type="button" disabled>Select Visible</button>
-              <button id="clearVisibleButton" class="button compact" type="button" disabled>Clear Visible</button>
+              <button id="selectVisibleButton" class="button compact" type="button" disabled title="Select every ready folder currently visible after search and status filters.">Select Visible</button>
+              <button id="clearVisibleButton" class="button compact" type="button" disabled title="Clear every selected folder currently visible after search and status filters.">Clear Visible</button>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Use</th>
-                    <th>Parent folder</th>
-                    <th>Folder path</th>
-                    <th>Last modified</th>
-                    <th>Status</th>
+                    <th title="Check folders you want to discard. Protected and failed folders cannot be selected.">Use</th>
+                    <th title="The top-level parent group detected inside the selected server folder.">Parent folder</th>
+                    <th title="The folder being reviewed. Use Copy/Open to verify the path before cleanup.">Folder path</th>
+                    <th title="The last modified date when the browser or backend can read it. Backend scans provide the most reliable folder dates.">Last modified</th>
+                    <th title="Ready can be discarded. Protected is blocked by rules. Failed means cleanup could not complete.">Status</th>
                   </tr>
                 </thead>
                 <tbody id="previewBody">
